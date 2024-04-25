@@ -1,0 +1,267 @@
+---
+title: "Saneamento Básico e Ensino Fundamental Completo nos estados do RS e PE até o ano de 2010"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: journal
+runtime: shiny
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggplot2)
+library(readxl)
+library(shiny)
+library(shinydashboard)
+library(rsconnect)
+
+
+# Carregar o arquivo Excel
+dados_PE <- read_excel("C:\\Users\\castr\\OneDrive\\Documentos\\Fipe_bolsa\\dados_PE.xlsx")
+dados_RS <- read_excel("C:\\Users\\castr\\OneDrive\\Documentos\\Fipe_bolsa\\dados_RS.xlsx")
+
+```
+
+# Saneamento básico e ensino fundamental completo nos estados
+## Análise Geral
+### Histograma 
+
+
+```{r}
+# UI da aplicação Shiny
+ui <- fluidPage(
+  titlePanel("Análise Geral"),
+  
+  # Sidebar layout
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("grafico1", "Selecione o Gráfico:",
+                  choices = c("Pernambuco", "Rio Grande do Sul"),
+                  selected = "Pernambuco")
+    ),
+    
+    # Main panel layout
+    mainPanel(
+      plotOutput("plot1")
+    )
+  )
+)
+
+# Função para renderizar o gráfico 1
+server <- function(input, output) {
+  output$plot1 <- renderPlot({
+    if (input$grafico1 == "Pernambuco") {
+      plot(dados_PE$`% da população que vive em domicílios com banheiro e água encanada 2010`, 
+           dados_PE$`% dos ocupados com ensino fundamental completo 2010`,
+           main = "Pernambuco",
+           xlab = "% População com Banheiro/Água",
+           ylab = "% Ocupados com Ensino Fundamental Completo",
+           col = "blue",
+           pch = 16)
+      abline(lm(dados_PE$`% dos ocupados com ensino fundamental completo 2010` ~ dados_PE$`% da população que vive em domicílios com banheiro e água encanada 2010`), col = "red")
+    } else {
+      plot(dados_RS$`% da população que vive em domicílios com banheiro e água encanada 2010`, 
+           dados_RS$`% dos ocupados com ensino fundamental completo 2010`,
+           main = "Rio Grande do Sul",
+           xlab = "% População com Banheiro/Água",
+           ylab = "% Ocupados com Ensino Fundamental Completo",
+           col = "blue",
+           pch = 16)
+      abline(lm(dados_RS$`% dos ocupados com ensino fundamental completo 2010` ~ dados_RS$`% da população que vive em domicílios com banheiro e água encanada 2010`), col = "red")
+    }
+  })
+}
+
+# Flexdashboard com Shiny
+shinyApp(ui = ui, server = server)
+
+
+```
+
+
+# Saneamento básico e ensino fundamental completo
+## Análise por cidade
+### Gráfico 2
+
+
+```{r}
+# UI da aplicação Shiny
+ui <- fluidPage(
+  titlePanel("Análise por Cidade"),
+  
+  # Sidebar layout
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("estado", "Selecione o Estado:",
+                  choices = c("Pernambuco", "Rio Grande do Sul"),
+                  selected = "Pernambuco"),
+      uiOutput("cidade_selector")
+    ),
+    
+    # Main panel layout
+    mainPanel(
+      plotOutput("plot2")
+    )
+  )
+)
+
+# Função para renderizar as opções de cidade
+server <- function(input, output, session) {
+  observe({
+    if (input$estado == "Pernambuco") {
+      choices <- unique(dados_PE$Territorialidades)
+    } else {
+      choices <- unique(dados_RS$Territorialidades)
+    }
+    updateSelectInput(session, "cidade", choices = choices)
+  })
+  
+  output$cidade_selector <- renderUI({
+    selectInput("cidade", "Selecione a Cidade:", choices = NULL)
+  })
+  
+# Função para renderizar o gráfico 2
+output$plot2 <- renderPlot({
+  if (!is.null(input$cidade)) {
+    if (input$estado == "Pernambuco") {
+      dados <- subset(dados_PE, Territorialidades == input$cidade)
+    } else {
+      dados <- subset(dados_RS, Territorialidades == input$cidade)
+    }
+    
+    # Verificar se há dados disponíveis para plotagem
+    if (nrow(dados) > 0) {
+      # Verificar a finitude dos valores para definir os limites do eixo x
+      if (any(!is.na(dados$`% da população que vive em domicílios com banheiro e água encanada 2010`) & is.finite(dados$`% da população que vive em domicílios com banheiro e água encanada 2010`))) {
+        xlim <- range(dados$`% da população que vive em domicílios com banheiro e água encanada 2010`, na.rm = TRUE)
+        xlim <- c(floor(xlim[1] / 10) * 10, ceiling(xlim[2] / 10) * 10)
+      } else {
+        xlim <- NULL
+      }
+      
+      # Verificar a finitude dos valores para definir os limites do eixo y
+      if (any(!is.na(dados$`% dos ocupados com ensino fundamental completo 2010`) & is.finite(dados$`% dos ocupados com ensino fundamental completo 2010`))) {
+        ylim <- range(dados$`% dos ocupados com ensino fundamental completo 2010`, na.rm = TRUE)
+        ylim <- c(floor(ylim[1] / 10) * 10, ceiling(ylim[2] / 10) * 10)
+      } else {
+        ylim <- NULL
+      }
+      
+      # Verificar se há valores finitos para calcular a regressão
+      if (!is.null(xlim) && !is.null(ylim)) {
+        # Plotar o gráfico de dispersão com linha de regressão
+        plot(dados$`% da população que vive em domicílios com banheiro e água encanada 2010`, 
+             dados$`% dos ocupados com ensino fundamental completo 2010`,
+             main = paste("Gráfico de Dispersão para", input$estado, "-", input$cidade),
+             xlab = "% População com Banheiro/Água",
+             ylab = "% Ocupados com Ensino Fundamental Completo",
+             col = "blue",
+             pch = 16,
+             xlim = xlim,
+             ylim = ylim)
+        if (is.finite(lm(`% dos ocupados com ensino fundamental completo 2010` ~ `% da população que vive em domicílios com banheiro e água encanada 2010`, data = dados)$coefficients[[1]]) && 
+            is.finite(lm(`% dos ocupados com ensino fundamental completo 2010` ~ `% da população que vive em domicílios com banheiro e água encanada 2010`, data = dados)$coefficients[[2]])) {
+          abline(lm(`% dos ocupados com ensino fundamental completo 2010` ~ `% da população que vive em domicílios com banheiro e água encanada 2010`, data = dados), col = "red")
+        }
+        # Ajustar a precisão dos rótulos dos eixos X e Y
+        axis(1, at = seq(xlim[1], xlim[2], by = 10))
+        axis(2, at = seq(ylim[1], ylim[2], by = 10))
+      }
+    } else {
+      plot(1, type = "n", axes = FALSE, xlab = "", ylab = "")
+      text(1, 1, "Nenhuma informação disponível para esta cidade", cex = 1.5)
+    }
+  }
+})
+
+
+
+
+}
+
+# Flexdashboard com Shiny
+shinyApp(ui = ui, server = server)
+
+
+```
+
+# Teste de Hipóteses 
+## Dia 3
+### Gráfico 3
+
+```{r}
+# Função para calcular a média de x e y por estado
+calcular_medias <- function(dados) {
+  media_x <- mean(dados$`% da população que vive em domicílios com banheiro e água encanada 2010`)
+  media_y <- mean(dados$`% dos ocupados com ensino fundamental completo 2010`)
+  c(media_x, media_y)
+}
+
+# Função para calcular a diferença entre as médias dos estados
+calcular_diferenca_medias <- function(dados1, dados2) {
+  diferenca_medias <- calcular_medias(dados2) - calcular_medias(dados1)
+  names(diferenca_medias) <- c("% da população", "% dos ocupados")
+  diferenca_medias
+}
+
+# UI da aplicação Shiny
+ui <- fluidPage(
+  titlePanel("Histograma das Médias por Estado"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("estado", "Selecione o Estado:",
+                  choices = c("Pernambuco", "Rio Grande do Sul"),
+                  selected = "Rio Grande do Sul"),
+      actionButton("calcular_btn", "Calcular"),
+      uiOutput("pergunta_output"),
+      uiOutput("resposta_output")
+    ),
+    mainPanel(
+      plotOutput("histograma")
+    )
+  )
+)
+
+# Função para criar a pergunta com base no estado selecionado
+server <- function(input, output) {
+  output$pergunta_output <- renderUI({
+    pergunta <- "O estado do Rio Grande do Sul tem a média percentual da população que vive em domicílios com banheiro e água encanada bem maior que Pernanbuco, mas a média percentual dos ocupados com ensino fundamental completo é muito acima também?"
+    HTML(pergunta)
+  })
+  
+  output$resposta_output <- renderUI({
+    if(input$calcular_btn > 0){
+      diferenca_medias <- calcular_diferenca_medias(dados_PE, dados_RS)
+      dif_ocupados <- diferenca_medias["% dos ocupados"]
+      resposta <- paste("É apenas", round(dif_ocupados, 2), "%")
+      HTML(resposta)
+    }
+  })
+  
+  output$histograma <- renderPlot({
+    if (input$estado == "Pernambuco") {
+      criar_histograma(dados_PE)
+    } else {
+      criar_histograma(dados_RS)
+    }
+  })
+}
+
+# Função para criar o histograma baseado no estado selecionado
+criar_histograma <- function(dados) {
+  medias <- calcular_medias(dados)
+  nomes_variaveis <- c("População com Banheiro e Água", "Ocupados com Ensino Fundamental")
+  cores <- c("blue", "red")
+  
+  ggplot(data = NULL, aes(x = nomes_variaveis, y = medias, fill = nomes_variaveis)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = cores, name = "Variável") +
+    labs(title = "Médias por Estado",
+         x = "Variável",
+         y = "Média") +
+    theme_minimal()
+}
+
+# Executar o aplicativo Shiny
+shinyApp(ui = ui, server = server)
+```
